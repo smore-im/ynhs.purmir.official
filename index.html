@@ -2189,10 +2189,26 @@ async function initFirebase(){
   try {
 
     // ── 공지사항 (실시간) ────────────────────────────────
-    onSnapshot(query(collection(db,'notices'), orderBy('date','desc')), snap=>{
-      window.notices = snapToArr(snap);
-      renderNotice(window.curNoticeFilter||'전체');
-    });
+    onSnapshot(
+      query(collection(db,'notices'), orderBy('date','desc')),
+      snap=>{
+
+        const arr = [];
+
+      snap.forEach(doc=>{
+        arr.push({
+          _id: doc.id,
+          ...doc.data()
+        });
+      });
+
+      window.notices = arr;
+
+      console.log('공지 데이터:', window.notices);
+
+      renderNotice(window.curNoticeFilter || '전체');
+    }
+  );
 
     // ── 행사 (실시간) ────────────────────────────────────
     onSnapshot(collection(db,'events'), snap=>{
