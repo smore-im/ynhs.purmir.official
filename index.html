@@ -1140,7 +1140,11 @@ function openNoticeDetail(idx){
   document.getElementById('nd-body').textContent=n.body||'(내용 없음)';
   const fEl=document.getElementById('nd-files');
   fEl.innerHTML=(n.files&&n.files.length)
-    ?'<h4>📎 첨부파일</h4>'+n.files.map(f=>`<span class="file-item">📄 ${esc(f)}</span>`).join('')
+    ?'<h4>📎 첨부파일</h4>'+n.files.map(f=>`
+  <a class="file-item" href="${f.url}" target="_blank">
+    📄 ${esc(f.name)}
+  </a>
+`).join('')
     :'';
   d.scrollIntoView({behavior:'smooth'});
 }
