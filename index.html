@@ -736,8 +736,8 @@ footer strong{color:#ddd;cursor:default;user-select:none;}
 
 <footer>
   <strong id="adm-trigger" onclick="admTriggerClick()">용남고등학교 학생회</strong><br>
-  경상남도 사천시 · ynhs.purmir.official@gmail.com<br>
-  © 2026 용남고등학교 학생회. All rights reserved.
+  경상남도 창원시 · council@yongnam.hs.kr<br>
+  © 2025 용남고등학교 학생회. All rights reserved.
 </footer>
 
 <!-- ADMIN LOGIN -->
@@ -748,6 +748,7 @@ footer strong{color:#ddd;cursor:default;user-select:none;}
       <h3>관리자 로그인</h3>
       <p>용남고 학생회 관리자 전용</p>
     </div>
+    <input class="adm-input" id="admEmail" type="email" placeholder="관리자 이메일" onkeydown="if(event.key==='Enter')admLogin()">
     <input class="adm-input" id="admPw" type="password" placeholder="비밀번호 입력" onkeydown="if(event.key==='Enter')admLogin()">
     <button class="adm-login-btn" onclick="admLogin()">로그인</button>
     <div class="adm-err" id="admErr"></div>
@@ -1566,9 +1567,8 @@ function submitPost(){
 document.getElementById('mo').addEventListener('click',e=>{if(e.target===e.currentTarget)closeMo();});
 
 // ══════════════════════════════════════════════════════════
-//  ADMIN — 진입
+//  ADMIN — 진입 (Firebase Authentication 기반)
 // ══════════════════════════════════════════════════════════
-const ADMIN_PW='yongnam2025!';
 let admClicks=0, admTimer2=null, admLogged=false;
 function admTriggerClick(){
   admClicks++;
@@ -1576,29 +1576,36 @@ function admTriggerClick(){
   admTimer2=setTimeout(()=>{admClicks=0;},5000);
   if(admClicks>=5){admClicks=0;admOpenMo();}
 }
-function admOpenMo(){document.getElementById('admMo').classList.add('on');setTimeout(()=>document.getElementById('admPw').focus(),100);}
-function admCloseMo(){document.getElementById('admMo').classList.remove('on');document.getElementById('admErr').textContent='';document.getElementById('admPw').value='';}
-function admLogin(){
-  const pw=document.getElementById('admPw').value;
-  if(pw===ADMIN_PW){
-    admLogged=true;admCloseMo();
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
-    document.querySelectorAll('nav').forEach(n=>n.style.display='none');
-    document.querySelector('footer').style.display='none';
-    const ap=document.getElementById('pg-admin');ap.style.display='block';
-    admGo('dash');
-  } else {
-    document.getElementById('admErr').textContent='❌ 비밀번호가 올바르지 않습니다.';
-    document.getElementById('admPw').value='';
-    document.getElementById('admPw').focus();
-  }
+function admOpenMo(){document.getElementById('admMo').classList.add('on');setTimeout(()=>document.getElementById('admEmail').focus(),100);}
+function admCloseMo(){
+  document.getElementById('admMo').classList.remove('on');
+  document.getElementById('admErr').textContent='';
+  document.getElementById('admPw').value='';
+  const em=document.getElementById('admEmail');if(em)em.value='';
 }
-function admLogout(){
+function admLogin(){
+  document.getElementById('admErr').textContent='로그인 중...';
+  if(window._fbAdmLogin) window._fbAdmLogin();
+  else document.getElementById('admErr').textContent='❌ 인증 모듈 로딩 중입니다. 잠시 후 다시 시도하세요.';
+}
+function _admEnterPanel(){
+  admLogged=true; admCloseMo();
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  document.querySelectorAll('nav').forEach(n=>n.style.display='none');
+  document.querySelector('footer').style.display='none';
+  const ap=document.getElementById('pg-admin'); ap.style.display='block';
+  admGo('dash');
+}
+function _admLeavePanel(){
   admLogged=false;
   document.getElementById('pg-admin').style.display='none';
   document.querySelectorAll('nav').forEach(n=>n.style.display='');
   document.querySelector('footer').style.display='';
   go('home');
+}
+function admLogout(){
+  if(window._fbAdmLogout) window._fbAdmLogout();
+  else _admLeavePanel();
 }
 function admBack(){admLogout();}
 
@@ -2096,6 +2103,8 @@ import { getFirestore, collection, doc,
          serverTimestamp }       from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
 import { getStorage, ref as sRef,
          uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
+import { getAuth, signInWithEmailAndPassword,
+         signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
 
 // ── Firebase 설정 ──────────────────────────────────────────
 const firebaseConfig = {
@@ -2111,6 +2120,39 @@ const firebaseConfig = {
 const app     = initializeApp(firebaseConfig);
 const db      = getFirestore(app);
 const storage = getStorage(app);
+const auth    = getAuth(app);
+
+// ── Firebase Auth 기반 관리자 로그인/로그아웃 ──────────────
+window._fbAdmLogin = async function(){
+  const email = (document.getElementById('admEmail')||{}).value||'';
+  const pw    = (document.getElementById('admPw')||{}).value||'';
+  if(!email||!pw){
+    document.getElementById('admErr').textContent='❌ 이메일과 비밀번호를 입력해주세요.';
+    return;
+  }
+  document.getElementById('admErr').textContent='로그인 중...';
+  try {
+    await signInWithEmailAndPassword(auth, email, pw);
+  } catch(e) {
+    let msg='❌ 로그인 실패';
+    if(['auth/invalid-credential','auth/wrong-password','auth/user-not-found'].includes(e.code))
+      msg='❌ 이메일 또는 비밀번호가 올바르지 않습니다.';
+    else if(e.code==='auth/too-many-requests')
+      msg='❌ 시도 횟수 초과. 잠시 후 다시 시도하세요.';
+    document.getElementById('admErr').textContent=msg;
+    document.getElementById('admPw').value='';
+  }
+};
+
+window._fbAdmLogout = async function(){
+  try { await signOut(auth); } catch(e){ console.error(e); }
+  _admLeavePanel();
+};
+
+// 인증 상태 감시: 로그인 시 자동으로 관리자 패널 진입
+onAuthStateChanged(auth, user => {
+  if(user && !admLogged) _admEnterPanel();
+});
 
 // ── 로딩 UI ────────────────────────────────────────────────
 function showLoading(msg='데이터 불러오는 중...'){
