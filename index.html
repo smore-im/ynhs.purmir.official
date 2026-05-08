@@ -2070,7 +2070,7 @@ function importStudentExcel(input){
 }
 
 // ══════════════════════════════════════════════════════════
-//  초기화
+//  초기화 (Firebase 로드 전 기본 렌더링)
 // ══════════════════════════════════════════════════════════
 document.getElementById('n-home').classList.add('on');
 renderNotice('전체');
@@ -2082,6 +2082,560 @@ renderVotes();
 renderGallery('전체');
 renderBudget();
 renderFaq();
+</script>
+
+<!-- ══════════════════════════════════════════════════════
+     FIREBASE INTEGRATION
+     ※ API 키는 Firestore 보안 규칙으로 보호됩니다
+══════════════════════════════════════════════════════ -->
+<script type="module">
+import { initializeApp }        from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, collection, doc,
+         getDocs, addDoc, updateDoc, deleteDoc,
+         onSnapshot, query, orderBy, setDoc,
+         serverTimestamp }       from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+import { getStorage, ref as sRef,
+         uploadBytes, getDownloadURL } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js';
+
+// ── Firebase 설정 ──────────────────────────────────────────
+const firebaseConfig = {
+  apiKey:            "AIzaSyDTFXYSYXTBfmRsIFjGmWvz_WINqn70znM",
+  authDomain:        "yongnam-student-council.firebaseapp.com",
+  projectId:         "yongnam-student-council",
+  storageBucket:     "yongnam-student-council.firebasestorage.app",
+  messagingSenderId: "728180217081",
+  appId:             "1:728180217081:web:9a0d2a83e1640761fabe28",
+  measurementId:     "G-PLQHJZS2GE"
+};
+
+const app     = initializeApp(firebaseConfig);
+const db      = getFirestore(app);
+const storage = getStorage(app);
+
+// ── 로딩 UI ────────────────────────────────────────────────
+function showLoading(msg='데이터 불러오는 중...'){
+  let el=document.getElementById('fb-loading');
+  if(!el){
+    el=document.createElement('div');
+    el.id='fb-loading';
+    el.style.cssText='position:fixed;bottom:20px;right:20px;background:#0F6E56;color:#fff;padding:10px 18px;border-radius:8px;font-size:13px;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2);display:flex;align-items:center;gap:8px;';
+    el.innerHTML='<span style="animation:spin 1s linear infinite;display:inline-block">⟳</span> '+msg;
+    document.body.appendChild(el);
+  }
+  el.style.display='flex';
+}
+function hideLoading(){
+  const el=document.getElementById('fb-loading');
+  if(el)el.style.display='none';
+}
+const style=document.createElement('style');
+style.textContent='@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}';
+document.head.appendChild(style);
+
+// ── Firestore → JS 배열 변환 헬퍼 ─────────────────────────
+function snapToArr(snap){ return snap.docs.map(d=>({_id:d.id,...d.data()})); }
+
+// ══════════════════════════════════════════════════════════
+//  실시간 리스너 & 초기 로드
+// ══════════════════════════════════════════════════════════
+async function initFirebase(){
+  showLoading('학생회 데이터 불러오는 중...');
+  try {
+
+    // ── 공지사항 (실시간) ────────────────────────────────
+    onSnapshot(query(collection(db,'notices'), orderBy('date','desc')), snap=>{
+      window.notices = snapToArr(snap);
+      renderNotice(window.curNoticeFilter||'전체');
+    });
+
+    // ── 행사 (실시간) ────────────────────────────────────
+    onSnapshot(collection(db,'events'), snap=>{
+      window.events = snapToArr(snap).sort((a,b)=>
+        (a.startMonth*100+a.startDay)-(b.startMonth*100+b.startDay));
+      renderCal(); renderEvts();
+    });
+
+    // ── 건의함 (실시간) ──────────────────────────────────
+    onSnapshot(query(collection(db,'posts'), orderBy('date','desc')), snap=>{
+      window.posts = snapToArr(snap).map(p=>({
+        ...p,
+        id: p._id,           // 기존 코드 호환
+        likes: p.likes||0,
+        comments: p.comments||[],
+        liked: false
+      }));
+      renderPosts(window.pf||'전체', window.ps||'latest');
+    });
+
+    // ── 투표/설문 (실시간) ───────────────────────────────
+    onSnapshot(collection(db,'votes'), snap=>{
+      // submitted 상태는 로컬 유지 (같은 세션 내)
+      const local = window.votes||[];
+      window.votes = snapToArr(snap).map(v=>{
+        const prev = local.find(l=>l._id===v._id);
+        return {...v, id:v._id, submitted: prev?prev.submitted:false};
+      });
+      renderVotes();
+    });
+
+    // ── 갤러리 (실시간) ──────────────────────────────────
+    onSnapshot(collection(db,'gallery'), snap=>{
+      window.gallery = snapToArr(snap);
+      renderGallery(window.gCurFilter||'전체');
+    });
+
+    // ── FAQ (실시간) ─────────────────────────────────────
+    onSnapshot(collection(db,'faqs'), snap=>{
+      window.faqs = snapToArr(snap);
+      renderFaq();
+    });
+
+    // ── 예산 (실시간) ────────────────────────────────────
+    onSnapshot(collection(db,'budget'), snap=>{
+      snap.docs.forEach(d=>{
+        const data=d.data();
+        if(window.budgetDepts[data.dept]!==undefined)
+          window.budgetDepts[data.dept]=data.items||[];
+      });
+      renderBudget();
+    });
+
+    hideLoading();
+  } catch(e){
+    console.error('Firebase 초기화 오류:', e);
+    hideLoading();
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+//  건의함 — Firebase 저장/수정/삭제
+// ══════════════════════════════════════════════════════════
+
+// 건의 등록 오버라이드
+window.submitPost = async function(){
+  const t=document.getElementById('mttl').value.trim();
+  const b=document.getElementById('mbdy').value.trim();
+  const c=document.getElementById('mcat').value;
+  if(!t||!b){alert('제목과 내용을 입력해주세요.');return;}
+  showLoading('건의 등록 중...');
+  try {
+    await addDoc(collection(db,'posts'),{
+      privacy: window.mPriv||'public',
+      cat:c, title:t, body:b,
+      author:'익명', date:window.todayStr(),
+      likes:0, comments:[], adminReply:null, answered:false,
+      createdAt: serverTimestamp()
+    });
+    closeMo();
+    document.getElementById('mttl').value='';
+    document.getElementById('mbdy').value='';
+    alert('건의가 등록되었습니다! 학생회가 7일 이내 답변드립니다.');
+  } catch(e){
+    alert('등록 실패: '+e.message);
+  } finally { hideLoading(); }
+};
+
+// 좋아요 오버라이드
+window.likeP = async function(id, btn){
+  if(btn.disabled)return;
+  const p=window.posts.find(x=>x._id===id||x.id===id);
+  if(!p)return;
+  btn.disabled=true;
+  try {
+    await updateDoc(doc(db,'posts',p._id||p.id),{likes:(p.likes||0)+1});
+  } catch(e){ btn.disabled=false; }
+};
+
+// 댓글 오버라이드
+window.addCmt = async function(id){
+  const inp=document.getElementById('ci-'+id);
+  const t=inp.value.trim(); if(!t)return;
+  const p=window.posts.find(x=>x._id===id||x.id===id);
+  if(!p)return;
+  inp.value='';
+  const newCmts=[...(p.comments||[]),{author:'익명',text:t,date:window.todayStr()}];
+  try {
+    await updateDoc(doc(db,'posts',p._id||p.id),{comments:newCmts});
+  } catch(e){ console.error(e); }
+};
+
+// ══════════════════════════════════════════════════════════
+//  투표 — Firebase 저장
+// ══════════════════════════════════════════════════════════
+window.submitVote = async function(vid){
+  const v=window.votes.find(x=>x._id===vid||x.id===vid);
+  if(!v||v.submitted||v.tag==='종료')return;
+  if(v.collectId){
+    const sno=(document.getElementById(`vid-sno-${vid}`)||{}).value||'';
+    const name=(document.getElementById(`vid-name-${vid}`)||{}).value||'';
+    if(!sno||!name){alert('학번과 이름을 입력해주세요.');return;}
+    // 참여자 저장
+    try {
+      await addDoc(collection(db,'students'),{
+        sno,name,surveyId:vid,surveyTitle:v.title,date:window.todayStr()
+      });
+    } catch(e){ console.error(e); }
+  }
+  // 주관식 답변 & 객관식 투표 반영
+  const updQs = v.questions.map((q,qi)=>{
+    if(q.type==='주관식'){
+      const inp=document.getElementById(`vs-${vid}-${qi}`);
+      return {...q, myAnswer: inp?inp.value.trim():''};
+    }
+    if(q.type==='객관식'&&q.selected!==null){
+      const newVotes=[...q.votes];
+      newVotes[q.selected]=(newVotes[q.selected]||0)+1;
+      return {...q, votes:newVotes};
+    }
+    return q;
+  });
+  // 로컬 submitted 플래그
+  v.submitted=true;
+  try {
+    await updateDoc(doc(db,'votes',v._id||v.id),{
+      questions:updQs, total:(v.total||0)+1
+    });
+  } catch(e){ console.error(e); }
+  renderVotes();
+};
+
+// ══════════════════════════════════════════════════════════
+//  관리자 — Firebase 저장 오버라이드
+// ══════════════════════════════════════════════════════════
+
+// ── 관리자: 건의 답변 ─────────────────────────────────────
+window.admSendReply = async function(id){
+  const txt=document.getElementById('replyTxt-'+id).value.trim();
+  if(!txt){alert('답변 내용을 입력해주세요.');return;}
+  showLoading('답변 저장 중...');
+  try {
+    await updateDoc(doc(db,'posts',id),{adminReply:txt,answered:true});
+    document.getElementById('admReplyArea').innerHTML='';
+    admRenderPosts();
+    alert('답변이 등록되었습니다!');
+  } catch(e){ alert('저장 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 건의 삭제 ─────────────────────────────────────
+window.admDelPost = async function(id){
+  if(!confirm('이 건의를 삭제하시겠습니까?'))return;
+  showLoading('삭제 중...');
+  try {
+    await deleteDoc(doc(db,'posts',id));
+    admRenderPosts();
+  } catch(e){ alert('삭제 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 공개/비공개 전환 ─────────────────────────────
+window.admTogglePrivacy = async function(id){
+  const p=window.posts.find(x=>x._id===id||x.id===id);
+  if(!p)return;
+  const newPrivacy=p.privacy==='private'?'public':'private';
+  try {
+    await updateDoc(doc(db,'posts',p._id||p.id),{privacy:newPrivacy});
+    admRenderPosts();
+  } catch(e){ alert('변경 실패: '+e.message); }
+};
+
+// ── 관리자: 공지 저장 ─────────────────────────────────────
+window.admSaveNotice = async function(){
+  const cat=document.getElementById('adm-ncat').value;
+  const ttl=document.getElementById('adm-nttl').value.trim();
+  const bdy=document.getElementById('adm-nbdy').value.trim();
+  if(!ttl)return alert('제목을 입력해주세요.');
+  const today=window.todayStr();
+  const editIdx=parseInt(document.getElementById('adm-nedit-idx').value);
+  const fileInput=document.getElementById('adm-nfile');
+  let fileNames=[];
+
+  // 파일 업로드 (Storage)
+  if(fileInput.files.length){
+    showLoading('파일 업로드 중...');
+    for(const file of fileInput.files){
+      try {
+        const path=`notices/${Date.now()}_${file.name}`;
+        const snap=await uploadBytes(sRef(storage,path),file);
+        const url=await getDownloadURL(snap.ref);
+        fileNames.push({name:file.name,url});
+      } catch(e){ console.error('파일 업로드 실패:',e); }
+    }
+  }
+
+  showLoading('공지 저장 중...');
+  try {
+    if(editIdx>=0 && editIdx<window.notices.length){
+      const n=window.notices[editIdx];
+      const docId=n._id;
+      await updateDoc(doc(db,'notices',docId),{
+        cat,title:ttl,body:bdy,editDate:today,isNew:true,
+        files:[...(n.files||[]),...fileNames]
+      });
+      alert('공지가 수정되었습니다!');
+    } else {
+      await addDoc(collection(db,'notices'),{
+        cat,title:ttl,body:bdy,date:today,editDate:null,isNew:true,files:fileNames,
+        createdAt:serverTimestamp()
+      });
+      alert('공지가 등록되었습니다!');
+    }
+    admCancelNoticeEdit();
+    admRenderNotice();
+  } catch(e){ alert('저장 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 공지 삭제 ─────────────────────────────────────
+window.admDelNotice = async function(i){
+  if(!confirm('삭제하시겠습니까?'))return;
+  const n=window.notices[i];
+  if(!n)return;
+  showLoading('삭제 중...');
+  try {
+    await deleteDoc(doc(db,'notices',n._id));
+    admRenderNotice();
+  } catch(e){ alert('삭제 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 행사 등록 ─────────────────────────────────────
+window.admAddEvent = async function(){
+  const mo=parseInt(document.getElementById('adm-emo').value);
+  const dy=parseInt(document.getElementById('adm-edy').value);
+  if(!mo||!dy){alert('월과 일을 입력해주세요.');return;}
+  const emoE=parseInt(document.getElementById('adm-emo-e').value)||mo;
+  const edyE=parseInt(document.getElementById('adm-edy-e').value)||dy;
+  const ts=document.getElementById('adm-etime-s').value;
+  const te=document.getElementById('adm-etime-e').value;
+  const place=document.getElementById('adm-eplace').value.trim();
+  const ttl=document.getElementById('adm-ettl').value.trim();
+  if(!ttl){alert('행사명을 입력해주세요.');return;}
+  const content=document.getElementById('adm-econtent').value.trim();
+  const desc=document.getElementById('adm-edesc').value.trim();
+  const tagRadio=document.querySelector('input[name="etag"]:checked');
+  let tag=tagRadio?tagRadio.value:'행사';
+  if(tag==='기타'){const inp=document.getElementById('etagOtherInp').value.trim();if(inp)tag=inp;}
+  showLoading('행사 등록 중...');
+  try {
+    await addDoc(collection(db,'events'),{
+      startMonth:mo,startDay:dy,endMonth:emoE,endDay:edyE,
+      timeStart:ts,timeEnd:te,place,title:ttl,content,
+      desc:desc||(place||ttl),tag
+    });
+    ['adm-emo','adm-edy','adm-emo-e','adm-edy-e','adm-etime-s','adm-etime-e',
+     'adm-eplace','adm-ettl','adm-econtent','adm-edesc'].forEach(id=>{
+      const el=document.getElementById(id);if(el)el.value='';});
+    document.getElementById('etagOtherInp').style.display='none';
+    admRenderEvents();
+    alert('행사가 등록되었습니다!');
+  } catch(e){ alert('저장 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 행사 삭제 ─────────────────────────────────────
+window.admDelEvent = async function(i){
+  if(!confirm('삭제하시겠습니까?'))return;
+  const e=window.events[i];
+  if(!e)return;
+  showLoading('삭제 중...');
+  try {
+    await deleteDoc(doc(db,'events',e._id));
+    admRenderEvents();
+  } catch(e2){ alert('삭제 실패: '+e2.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 투표 등록 ─────────────────────────────────────
+window.admAddVote = async function(){
+  const ttl=document.getElementById('adm-vttl').value.trim();
+  if(!ttl)return alert('설문 제목을 입력해주세요.');
+  const vbQsLocal=window.vbQs||[];
+  if(!vbQsLocal.length)return alert('문항을 1개 이상 추가해주세요.');
+  const collectId=document.getElementById('vb-id-toggle').checked;
+  const questions=vbQsLocal.map(q=>{
+    const qd={type:q.type,text:q.text};
+    if(q.type==='객관식'){qd.opts=q.opts.filter(o=>o.trim());if(!qd.opts.length)qd.opts=['선택지1'];qd.votes=qd.opts.map(()=>0);qd.selected=null;}
+    else if(q.type==='주관식'){qd.placeholder=q.placeholder;qd.answers=[];qd.myAnswer='';}
+    else if(q.type==='사진'){qd.imgSrc=q.imgSrc;}
+    return qd;
+  });
+  showLoading('설문 등록 중...');
+  try {
+    await addDoc(collection(db,'votes'),{
+      tag:'진행',title:ttl,collectId,participants:[],questions,total:0,
+      createdAt:serverTimestamp()
+    });
+    document.getElementById('adm-vttl').value='';
+    document.getElementById('vb-id-toggle').checked=false;
+    window.vbQs=[];renderVbQuestions();admRenderVote();
+    alert('설문이 등록되었습니다!');
+  } catch(e){ alert('저장 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 투표 마감/재개 ────────────────────────────────
+window.admToggleVote = async function(i){
+  const v=window.votes[i];
+  if(!v)return;
+  const newTag=v.tag==='진행'?'종료':'진행';
+  try {
+    await updateDoc(doc(db,'votes',v._id||v.id),{tag:newTag});
+    admRenderVote();
+  } catch(e){ alert('변경 실패: '+e.message); }
+};
+
+// ── 관리자: 투표 삭제 ─────────────────────────────────────
+window.admDelVote = async function(i){
+  if(!confirm('삭제하시겠습니까?'))return;
+  const v=window.votes[i];
+  if(!v)return;
+  showLoading('삭제 중...');
+  try {
+    await deleteDoc(doc(db,'votes',v._id||v.id));
+    admRenderVote();
+  } catch(e){ alert('삭제 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 갤러리 추가 (이미지 Storage 업로드) ──────────
+window.admAddGallery = async function(){
+  const lbl=document.getElementById('adm-glbl').value.trim();
+  const cat=document.getElementById('adm-gcat').value;
+  if(!lbl)return alert('설명을 입력해주세요.');
+  const pending=window.pendingGalleryFiles||[];
+  showLoading('갤러리 추가 중...');
+  try {
+    if(pending.length){
+      for(const f of pending){
+        // Storage에 업로드
+        const path=`gallery/${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const blob=await fetch(f.src).then(r=>r.blob());
+        const snap=await uploadBytes(sRef(storage,path),blob);
+        const url=await getDownloadURL(snap.ref);
+        await addDoc(collection(db,'gallery'),{src:url,label:lbl,cat,emoji:'🖼',createdAt:serverTimestamp()});
+      }
+    } else {
+      await addDoc(collection(db,'gallery'),{src:null,label:lbl,cat,emoji:'📷',createdAt:serverTimestamp()});
+    }
+    document.getElementById('adm-glbl').value='';
+    document.getElementById('adm-gimg-preview').innerHTML='';
+    document.getElementById('adm-gimgs').value='';
+    window.pendingGalleryFiles=[];
+    admRenderGallery();
+    alert('갤러리에 추가되었습니다!');
+  } catch(e){ alert('저장 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 갤러리 삭제 ───────────────────────────────────
+window.admDelGallery = async function(i){
+  if(!confirm('삭제하시겠습니까?'))return;
+  const g=window.gallery[i];
+  if(!g)return;
+  showLoading('삭제 중...');
+  try {
+    await deleteDoc(doc(db,'gallery',g._id));
+    admRenderGallery();
+    renderGallery(window.gCurFilter||'전체');
+  } catch(e){ alert('삭제 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: 예산 저장 ─────────────────────────────────────
+window.admSaveBudget = async function(){
+  const dept=window.admCurBudgetDept||'회장단';
+  const items=window.budgetDepts[dept]||[];
+  showLoading('예산 저장 중...');
+  try {
+    // dept를 ID로 사용해서 setDoc (upsert)
+    await setDoc(doc(db,'budget',dept),{dept,items});
+    renderBudget();
+    alert('예산이 저장되었습니다!');
+  } catch(e){ alert('저장 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: FAQ 추가 ──────────────────────────────────────
+window.admAddFaq = async function(){
+  const q=document.getElementById('adm-fq').value.trim();
+  const a=document.getElementById('adm-fa').value.trim();
+  if(!q||!a)return alert('질문과 답변을 모두 입력해주세요.');
+  showLoading('FAQ 저장 중...');
+  try {
+    await addDoc(collection(db,'faqs'),{q,a,createdAt:serverTimestamp()});
+    document.getElementById('adm-fq').value='';
+    document.getElementById('adm-fa').value='';
+    admRenderFaq();
+    alert('FAQ가 추가되었습니다!');
+  } catch(e){ alert('저장 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 관리자: FAQ 삭제 ──────────────────────────────────────
+window.admDelFaq = async function(i){
+  if(!confirm('삭제하시겠습니까?'))return;
+  const f=window.faqs[i];
+  if(!f)return;
+  showLoading('삭제 중...');
+  try {
+    await deleteDoc(doc(db,'faqs',f._id));
+    admRenderFaq();
+    renderFaq();
+  } catch(e){ alert('삭제 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 학생 DB: Firebase에서 불러오기 ───────────────────────
+window.admRenderStudents = async function(){
+  const snoF=(document.getElementById('adm-sno-filter')||{}).value||'';
+  const nameF=(document.getElementById('adm-sname-filter')||{}).value||'';
+  try {
+    const snap=await getDocs(collection(db,'students'));
+    window.studentDB=snap.docs.map(d=>({_id:d.id,...d.data()}));
+  } catch(e){ console.error(e); }
+  const list=window.studentDB.filter(s=>
+    String(s.sno||'').includes(snoF)&&String(s.name||'').includes(nameF));
+  document.getElementById('studentCount').textContent=window.studentDB.length;
+  document.getElementById('admStudentsBody').innerHTML=list.length
+    ?list.map(s=>`<tr>
+      <td style="color:var(--at1)">${s.sno||''}</td>
+      <td style="color:var(--at1)">${s.name||''}</td>
+      <td style="color:var(--at3)">${s.surveyTitle||'-'}</td>
+      <td style="color:var(--at3);white-space:nowrap">${s.date||'-'}</td>
+      <td><button class="adm-del" onclick="admDelStudentById('${s._id}')">삭제</button></td>
+    </tr>`).join('')
+    :'<tr><td colspan="5" style="text-align:center;color:var(--at3);padding:24px">등록된 학생 정보가 없습니다.</td></tr>';
+};
+
+window.admDelStudentById = async function(id){
+  if(!confirm('삭제하시겠습니까?'))return;
+  try {
+    await deleteDoc(doc(db,'students',id));
+    window.admRenderStudents();
+  } catch(e){ alert('삭제 실패: '+e.message); }
+};
+
+// 엑셀 내보내기 (Firebase 데이터 기반)
+window.exportStudentExcel = async function(){
+  if(typeof XLSX==='undefined'){alert('엑셀 라이브러리가 로드되지 않았습니다.');return;}
+  showLoading('데이터 불러오는 중...');
+  try {
+    const snap=await getDocs(collection(db,'students'));
+    const data=snap.docs.map(d=>d.data());
+    if(!data.length){alert('내보낼 학생 데이터가 없습니다.');return;}
+    const rows=data.map(s=>({'학번':s.sno||'','이름':s.name||'','참여 설문':s.surveyTitle||'','참여일':s.date||''}));
+    const ws=XLSX.utils.json_to_sheet(rows);
+    ws['!cols']=[{wch:12},{wch:10},{wch:30},{wch:14}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,'학생DB',ws);
+    XLSX.writeFile(wb,`용남고학생회_학생DB_${window.todayStr().replace(/\./g,'')}.xlsx`);
+  } catch(e){ alert('내보내기 실패: '+e.message); }
+  finally{ hideLoading(); }
+};
+
+// ── 앱 시작 ───────────────────────────────────────────────
+initFirebase();
 </script>
 </body>
 </html>

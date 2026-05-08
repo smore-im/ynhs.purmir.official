@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── 공지사항: 누구나 읽기, 쓰기 불가 (관리자 콘솔만 가능) ──
+    match /notices/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── 행사: 누구나 읽기 ──
+    match /events/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── 건의함: 누구나 읽기/쓰기 (익명 건의) ──
+    match /posts/{id} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll(['title','body','date','privacy','cat'])
+                    && request.resource.data.title is string
+                    && request.resource.data.title.size() <= 200;
+      allow update: if true;  // 댓글, 좋아요 허용
+      allow delete: if false; // 삭제는 관리자 콘솔만
+    }
+
+    // ── 투표/설문: 누구나 읽기, 참여(update) ──
+    match /votes/{id} {
+      allow read: if true;
+      allow create: if false;
+      allow update: if true;  // 투표 참여
+      allow delete: if false;
+    }
+
+    // ── 갤러리: 누구나 읽기 ──
+    match /gallery/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── FAQ: 누구나 읽기 ──
+    match /faqs/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── 예산: 누구나 읽기 ──
+    match /budget/{id} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // ── 학생 DB: 설문 참여 시 쓰기만 허용, 읽기 불가 ──
+    match /students/{id} {
+      allow read: if false;  // 관리자 콘솔에서만 읽기
+      allow create: if request.resource.data.keys().hasAll(['sno','name'])
+                    && request.resource.data.sno is string
+                    && request.resource.data.sno.size() <= 20;
+      allow update, delete: if false;
+    }
+  }
+}
