@@ -498,8 +498,10 @@ footer strong{color:#ddd;cursor:default;user-select:none;}
     <li><a id="n-suggest" onclick="go('suggest')">건의함</a></li>
     <li><a id="n-members" onclick="go('members')">학생회 소개</a></li>
     <li><a id="n-vote" onclick="go('vote')">투표/설문</a></li>
+    <li><a id="n-gallery" onclick="go('gallery')">갤러리</a></li>
     <li><a id="n-budget" onclick="go('budget')">예산 공개</a></li>
     <li><a id="n-faq" onclick="go('faq')">FAQ</a></li>
+    <li><a id="n-fun" onclick="go('fun')">🎡 이벤트</a></li>
   </ul>
   <button class="nav-cta" onclick="openMo()">✏ 건의하기</button>
 </nav>
@@ -572,13 +574,17 @@ footer strong{color:#ddd;cursor:default;user-select:none;}
       <button class="nd-back" onclick="closeNoticeDetail()">← 목록으로</button>
       <div class="nd-header">
         <span class="nbadge" id="nd-cat"></span>
-        <div>
+        <div style="flex:1">
           <h3 id="nd-title" style="font-size:18px;font-weight:700;margin-bottom:4px;"></h3>
           <span style="font-size:12px;color:var(--t3);" id="nd-date"></span>
         </div>
       </div>
       <div class="nd-body" id="nd-body"></div>
       <div class="nd-files" id="nd-files"></div>
+      <div style="display:flex;justify-content:space-between;gap:12px;margin-top:20px;padding-top:16px;border-top:1px solid var(--br);">
+        <button id="nd-prev" class="nd-back" style="flex:1;text-align:left;" onclick="moveNotice(-1)">← 이전글</button>
+        <button id="nd-next" class="nd-back" style="flex:1;text-align:right;" onclick="moveNotice(1)">다음글 →</button>
+      </div>
     </div>
   </div>
 </div>
@@ -767,10 +773,8 @@ footer strong{color:#ddd;cursor:default;user-select:none;}
       <a id="an-notice" onclick="admGo('notice')">공지</a>
       <a id="an-vote" onclick="admGo('vote')">투표/설문</a>
       <a id="an-events" onclick="admGo('events')">행사</a>
-      <a id="an-gallery" onclick="admGo('gallery')">갤러리</a>
       <a id="an-budget" onclick="admGo('budget')">예산</a>
       <a id="an-faq" onclick="admGo('faq')">FAQ</a>
-      <a id="an-members-adm" onclick="admGo('members-adm')">명단 관리</a>
       <a id="an-students" onclick="admGo('students')">학생 DB</a>
     </div>
     <button class="adm-back" onclick="admBack()">← 홈으로</button>
@@ -963,20 +967,6 @@ footer strong{color:#ddd;cursor:default;user-select:none;}
       </div>
     </div>
 
-    <!-- MEMBERS ADMIN -->
-    <div class="adm-section" id="adm-members-adm">
-      <div class="adm-form">
-        <h3>👥 학생회 명단 관리</h3>
-        <p style="font-size:12px;color:var(--at3);margin-bottom:16px">이름, 학반, 연락처를 수정 후 저장 버튼을 눌러주세요. 변경사항은 홈페이지에 즉시 반영됩니다.</p>
-        <div style="overflow-x:auto;">
-          <table class="adm-table">
-            <thead><tr><th>부서</th><th>직책</th><th>이름</th><th>학반</th><th>연락처/링크</th><th>저장</th></tr></thead>
-            <tbody id="admMembersBody"><tr><td colspan="6" style="text-align:center;color:var(--at3);padding:24px">불러오는 중...</td></tr></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
     <!-- STUDENT DB -->
     <div class="adm-section" id="adm-students">
       <div class="adm-table-wrap">
@@ -1102,7 +1092,7 @@ function go(name){
   if(name==='notice'){renderNotice('전체');closeNoticeDetail();}
   if(name==='events'){renderCal();renderEvts();}
   if(name==='suggest')renderPosts('전체','latest');
-  if(name==='members'){window.curDept='전체';renderMembers('전체');}
+  if(name==='members')renderMembers('전체');
   if(name==='vote')renderVotes();
   if(name==='gallery')renderGallery('전체');
   if(name==='budget')renderBudget();
@@ -1123,13 +1113,15 @@ function nFilter(cat,btn){
   closeNoticeDetail();
 }
 function renderNotice(cat){
-  const list=cat==='전체'?notices:notices.filter(n=>n.cat===cat);
+  const noticeArr=window.notices||notices;
+  const list=cat==='전체'?noticeArr:noticeArr.filter(n=>n.cat===cat);
   if(!list.length){
     document.getElementById('ntbody').innerHTML='<tr class="empty-row"><td colspan="3">등록된 공지사항이 없습니다.</td></tr>';
     return;
   }
   document.getElementById('ntbody').innerHTML=list.map((n)=>{
-    const idx=notices.indexOf(n);
+    const noticeArr2=window.notices||notices;
+    const idx=noticeArr2.indexOf(n);
     const attach=n.files&&n.files.length?`<span class="n-attach">📎${n.files.length}</span>`:'';
     const dateStr=n.editDate
       ?`${n.date} <span style="color:var(--am);font-size:10px">(수정 ${n.editDate})</span>`
@@ -1141,9 +1133,12 @@ function renderNotice(cat){
     </tr>`;
   }).join('');
 }
+let curNoticeIdx = -1;
 function openNoticeDetail(idx){
-  const n=notices[idx];
+  const arr=window.notices||notices;
+  const n=arr[idx];
   if(!n)return;
+  curNoticeIdx=idx;
   const d=document.getElementById('noticeDetail');
   d.classList.add('on');
   document.getElementById('nd-cat').className='nbadge nb-'+n.cat;
@@ -1153,15 +1148,23 @@ function openNoticeDetail(idx){
   document.getElementById('nd-body').textContent=n.body||'(내용 없음)';
   const fEl=document.getElementById('nd-files');
   fEl.innerHTML=(n.files&&n.files.length)
-    ?'<h4>📎 첨부파일</h4>'+n.files.map(f=>`
-  <a class="file-item" href="${f.url}" target="_blank">
-    📄 ${esc(f.name)}
-  </a>
-`).join('')
+    ?'<h4>📎 첨부파일</h4>'+n.files.map(f=>`<a class="file-item" href="${f.url||'#'}" target="_blank">📄 ${esc(f.name||f)}</a>`).join('')
     :'';
+  // 이전/다음 버튼 상태
+  const prevBtn=document.getElementById('nd-prev');
+  const nextBtn=document.getElementById('nd-next');
+  if(prevBtn) prevBtn.disabled = idx<=0;
+  if(nextBtn) nextBtn.disabled = idx>=arr.length-1;
+  if(prevBtn) prevBtn.style.opacity = idx<=0?'0.3':'1';
+  if(nextBtn) nextBtn.style.opacity = idx>=arr.length-1?'0.3':'1';
   d.scrollIntoView({behavior:'smooth'});
 }
-function closeNoticeDetail(){document.getElementById('noticeDetail').classList.remove('on');}
+function moveNotice(dir){
+  const arr=window.notices||notices;
+  const newIdx=curNoticeIdx+dir;
+  if(newIdx>=0&&newIdx<arr.length) openNoticeDetail(newIdx);
+}
+function closeNoticeDetail(){document.getElementById('noticeDetail').classList.remove('on');curNoticeIdx=-1;}
 
 // ══════════════════════════════════════════════════════════
 //  캘린더 & 행사
@@ -1220,8 +1223,9 @@ function cmPrev(){cm2--;if(cm2<1){cm2=12;cy--;}renderCal();}
 function cmNext(){cm2++;if(cm2>12){cm2=1;cy++;}renderCal();}
 function renderEvts(){
   const el=document.getElementById('evtList');
-  if(!events.length){el.innerHTML='<div class="no-events">등록된 행사가 없습니다.</div>';return;}
-  el.innerHTML=events.map(e=>{
+  const evtArr=window.events||events;
+  if(!evtArr.length){el.innerHTML='<div class="no-events">등록된 행사가 없습니다.</div>';return;}
+  el.innerHTML=evtArr.map(e=>{
     const em=e.endMonth||e.startMonth,ed=e.endDay||e.startDay;
     const isM=(em!==e.startMonth||ed!==e.startDay);
     const timeStr=e.timeStart?(e.timeEnd?`${e.timeStart}~${e.timeEnd}`:`${e.timeStart} 시작`):'';
@@ -1250,7 +1254,7 @@ let pf='전체', ps='latest';
 function sFilter(f,btn){pf=f;document.querySelectorAll('#pg-suggest .tabs .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderPosts(pf,ps);}
 function sSort(s,btn){ps=s;document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderPosts(pf,ps);}
 function renderPosts(filter,sort){
-  let list=[...posts];
+  let list=[...(window.posts||posts)];
   if(filter==='공개')list=list.filter(p=>p.privacy==='public');
   if(filter==='비공개')list=list.filter(p=>p.privacy==='private');
   if(sort==='popular')list.sort((a,b)=>b.likes-a.likes);
@@ -1264,9 +1268,8 @@ function renderPost(p){
   const body=priv?`<div class="pc-body" style="color:#aaa;font-style:italic">🔒 비공개 글입니다.</div>`:`<div class="pc-body">${esc(p.body)}</div>`;
   const rep=(!priv&&p.adminReply)?`<div class="admin-rep"><div class="rep-label">📣 학생회 답변</div><div class="rep-body">${esc(p.adminReply)}</div></div>`:'';
   const cmtHtml=(!priv&&p.comments.length)?`<div class="cmts">${p.comments.map(c=>`<div class="cmt"><div class="cmt-av">${esc((c.author||'익')[0])}</div><div class="cmt-txt"><span class="cmt-au">${esc(c.author)}</span> ${esc(c.text)}</div></div>`).join('')}</div>`:'';
-  const pid=p._id||p.id;
-  const cinput=!priv?`<div class="cmt-row"><input class="cmt-inp" id="ci-${pid}" placeholder="댓글 입력 (익명)"><button class="cmt-sub" onclick="addCmt('${pid}')">등록</button></div>`:'';  
-  return `<div class="pc" id="p-${pid}">
+  const cinput=!priv?`<div class="cmt-row"><input class="cmt-inp" id="ci-${p.id}" placeholder="댓글 입력 (익명)"><button class="cmt-sub" onclick="addCmt(${p.id})">등록</button></div>`:'';
+  return `<div class="pc" id="p-${p.id}">
     <div class="pc-top">
       <span class="pb ${priv?'pb-pri':'pb-pub'}">${priv?'비공개':'공개'}</span>
       ${p.adminReply?'<span class="pb pb-ans">답변완료</span>':''}
@@ -1277,7 +1280,7 @@ function renderPost(p){
       <span class="pc-auth">${esc(p.author||'익명')}</span>
       <span class="pc-date">${esc(p.date)}</span>
       <div class="pc-acts">
-        <button class="act${p.liked?' liked':''}" onclick="likeP('${pid}',this)" ${p.liked?'disabled':''}>♡ ${p.likes}</button>
+        <button class="act${p.liked?' liked':''}" onclick="likeP(${p.id},this)" ${p.liked?'disabled':''}>♡ ${p.likes}</button>
         <button class="act">💬 ${p.comments.length}</button>
       </div>
     </div>
@@ -1309,11 +1312,10 @@ function addCmt(id){
 let curDept='전체';
 function dFilter(d,btn){curDept=d;document.querySelectorAll('#dtabs .tab').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderMembers(d);}
 function renderMembers(dept){
-  const mList=window.members||members;
   const dlist=dept==='전체'?depts:depts.filter(d=>d.key===dept);
   const wrap=document.getElementById('memberWrap');
   const html=dlist.map(d=>{
-    const ms=mList.filter(m=>m.dept===d.key);
+    const ms=members.filter(m=>m.dept===d.key);
     if(!ms.length)return'';
     const rk=k=>k==='head'?'rb-head':k==='chief'?'rb-chief':'rb-sub';
     const rows=ms.map(m=>`<tr>
@@ -1344,8 +1346,9 @@ function renderMembers(dept){
 // ══════════════════════════════════════════════════════════
 function renderVotes(){
   const el=document.getElementById('voteGrid');
-  if(!votes.length){el.innerHTML='<div class="vote-empty" style="grid-column:1/-1">진행 중인 투표/설문이 없습니다.</div>';return;}
-  el.innerHTML=votes.map(v=>renderVoteCard(v)).join('');
+  const vArr=window.votes||votes;
+  if(!vArr.length){el.innerHTML='<div class="vote-empty" style="grid-column:1/-1">진행 중인 투표/설문이 없습니다.</div>';return;}
+  el.innerHTML=(window.votes||votes).map(v=>renderVoteCard(v)).join('');
 }
 function renderVoteCard(v){
   const done=v.tag==='종료', submitted=v.submitted, locked=done||submitted;
@@ -1386,7 +1389,7 @@ function renderVoteCard(v){
   }).join('');
   const banner=submitted&&!done?`<div class="voted-banner">✅ 참여해주셔서 감사합니다!</div>`:'';
   const submitBtn=!locked
-    ?`<button class="vote-btn" onclick="submitVote('${vid_}')">제출하기</button>`
+    ?`<button class="vote-btn" onclick="submitVote(${v.id})">제출하기</button>`
     :`<button class="vote-btn" disabled>${submitted?'제출완료':'종료됨'}</button>`;
   return `<div class="vote-card">
     <div class="vc-top">
@@ -1395,7 +1398,7 @@ function renderVoteCard(v){
     </div>
     <div class="vc-title">${esc(v.title)}</div>
     ${banner}${idSection}${questionsHtml}
-    <div class="vc-foot"><span>총 ${(v.total||0).toLocaleString()}명 참여</span>${submitBtn}</div>
+    <div class="vc-foot"><span>총 ${v.total.toLocaleString()}명 참여</span>${submitBtn}</div>
   </div>`;
 }
 function selectOpt(vid,qi,optIdx){
@@ -1506,9 +1509,10 @@ function renderBudget(){
 //  FAQ
 // ══════════════════════════════════════════════════════════
 function renderFaq(){
+  const faqArr=window.faqs||faqs;
   const wrap=document.getElementById('faqListWrap');
-  if(!faqs.length){wrap.innerHTML='<div class="faq-empty">등록된 FAQ가 없습니다.</div>';return;}
-  wrap.innerHTML=`<div class="faq-list">${faqs.map((f,i)=>`
+  if(!faqArr.length){wrap.innerHTML='<div class="faq-empty">등록된 FAQ가 없습니다.</div>';return;}
+  wrap.innerHTML=`<div class="faq-list">${faqArr.map((f,i)=>`
     <div class="faq-item" id="faq-${i}">
       <div class="faq-q" onclick="toggleFaq(${i})">
         <div class="faq-icon">Q</div>${esc(f.q)}<span class="faq-arr">▼</span>
@@ -1575,8 +1579,17 @@ function setP(v){
   document.getElementById('ppri').classList.toggle('on',v==='private');
 }
 function submitPost(){
-  if(window.submitPost && window.submitPost !== submitPost){window.submitPost();return;}
-  alert('데이터를 불러오는 중입니다. 잠시 후 다시 시도해주세요.');
+  if(window._fbSubmitPost){window._fbSubmitPost();return;}
+  const t=document.getElementById('mttl').value.trim();
+  const b=document.getElementById('mbdy').value.trim();
+  const c=document.getElementById('mcat').value;
+  if(!t||!b){alert('제목과 내용을 입력해주세요.');return;}
+  posts.unshift({id:Date.now(),privacy:mPriv,cat:c,title:t,body:b,author:'익명',date:todayStr(),likes:0,liked:false,comments:[],adminReply:null,answered:false});
+  closeMo();
+  document.getElementById('mttl').value='';
+  document.getElementById('mbdy').value='';
+  go('suggest');
+  alert('건의가 등록되었습니다! 학생회가 7일 이내 답변드립니다.');
 }
 document.getElementById('mo').addEventListener('click',e=>{if(e.target===e.currentTarget)closeMo();});
 
@@ -1630,7 +1643,7 @@ function admGo(sec){
   const navEl=document.getElementById('an-'+sec);
   if(secEl)secEl.classList.add('on');
   if(navEl)navEl.classList.add('on');
-  const fn={dash:admRenderDash,posts:admRenderPosts,notice:admRenderNotice,vote:admRenderVote,events:admRenderEvents,gallery:admRenderGallery,budget:admRenderBudget,faq:admRenderFaq,students:admRenderStudents,'members-adm':()=>window.admRenderMembersAdmin&&window.admRenderMembersAdmin()};
+  const fn={dash:admRenderDash,posts:admRenderPosts,notice:admRenderNotice,vote:admRenderVote,events:admRenderEvents,gallery:admRenderGallery,budget:admRenderBudget,faq:admRenderFaq,students:admRenderStudents};
   if(fn[sec])fn[sec]();
 }
 
@@ -1664,10 +1677,10 @@ function admRenderPosts(){
       <td><span class="adm-badge ${p.privacy==='private'?'ab-pri':'ab-new'}">${p.privacy==='private'?'비공개':'공개'}</span></td>
       <td style="color:var(--at3);white-space:nowrap">${p.date}</td>
       <td>${p.adminReply
-        ?`<div style="display:flex;gap:4px;flex-wrap:wrap"><span class="adm-badge ab-ans">답변완료</span><button class="adm-edit-btn" onclick="admOpenReply('${p._id||p.id}',true)">수정</button></div>`
-        :`<button class="rep-send" onclick="admOpenReply('${p._id||p.id}',false)">답변하기</button>`}</td>
-      <td><button class="adm-edit-btn" onclick="admTogglePrivacy('${p._id||p.id}')">${p.privacy==='private'?'🌐 공개전환':'🔒 비공개'}</button></td>
-      <td><button class="adm-del" onclick="admDelPost('${p._id||p.id}')">삭제</button></td>
+        ?`<div style="display:flex;gap:4px;flex-wrap:wrap"><span class="adm-badge ab-ans">답변완료</span><button class="adm-edit-btn" onclick="admOpenReply(${p.id},true)">수정</button></div>`
+        :`<button class="rep-send" onclick="admOpenReply(${p.id},false)">답변하기</button>`}</td>
+      <td><button class="adm-edit-btn" onclick="admTogglePrivacy(${p.id})">${p.privacy==='private'?'🌐 공개전환':'🔒 비공개'}</button></td>
+      <td><button class="adm-del" onclick="admDelPost(${p.id})">삭제</button></td>
     </tr>`).join('')
     :'<tr><td colspan="7" style="text-align:center;color:var(--at3);padding:24px">건의사항이 없습니다.</td></tr>';
 }
@@ -1726,6 +1739,52 @@ function admRenderNotice(){
   renderNotice(curNoticeFilter||'전체');
 }
 function admDelNotice(i){if(window._fbAdmDelNotice){window._fbAdmDelNotice(i);return;}if(!confirm('삭제?'))return;const notices=window.notices||[];notices.splice(i,1);admRenderNotice();}
+
+// ══════════════════════════════════════════════════════════
+//  투표 빌더 함수 (관리자)
+// ══════════════════════════════════════════════════════════
+let vbQs=[];
+function vbAddQ(type){
+  vbQs.push({type,text:'',opts:type==='객관식'?['','']:[],placeholder:'의견을 자유롭게 작성해주세요.',imgSrc:null});
+  window.vbQs=vbQs;
+  renderVbQuestions();
+}
+function renderVbQuestions(){
+  const el=document.getElementById('vbQuestions');
+  if(!el)return;
+  vbQs=window.vbQs||vbQs;
+  el.innerHTML=vbQs.map((q,i)=>{
+    let inner='';
+    if(q.type==='객관식'){
+      inner=`<div class="vb-opt-list">${q.opts.map((o,oi)=>`<div class="vb-opt-row">
+        <input class="vb-opt-input" value="${esc(o)}" placeholder="선지 ${oi+1}" oninput="(window.vbQs||vbQs)[${i}].opts[${oi}]=this.value">
+        <button class="vb-del-opt" onclick="vbDelOpt(${i},${oi})">✕</button>
+      </div>`).join('')}</div>
+      <button class="vb-add-opt" onclick="vbAddOpt(${i})">＋ 선지 추가</button>`;
+    } else if(q.type==='주관식'){
+      inner=`<input class="adm-fi" style="margin-top:8px" value="${esc(q.placeholder)}" placeholder="안내 문구" oninput="(window.vbQs||vbQs)[${i}].placeholder=this.value">`;
+    } else if(q.type==='사진'){
+      inner=`<input type="file" accept="image/*" class="adm-fi" style="padding:6px;cursor:pointer;margin-top:8px" onchange="vbLoadImg(event,${i})">${q.imgSrc?`<img src="${q.imgSrc}" class="vb-img-preview">`:''}`;
+    }
+    const typeBtns=['객관식','주관식','사진'].map(t=>`<button class="vb-type-btn ${q.type===t?'on':''}" onclick="vbChangeType(${i},'${t}')">${t}</button>`).join('');
+    return `<div class="vb-question">
+      <button class="vb-del-q" onclick="vbDelQ(${i})">✕ 삭제</button>
+      <div style="font-size:12px;color:var(--at3);margin-bottom:8px;font-weight:600">문항 ${i+1}</div>
+      <div class="vb-q-type">${typeBtns}</div>
+      <input class="adm-fi" value="${esc(q.text)}" placeholder="문항 내용 입력" oninput="(window.vbQs||vbQs)[${i}].text=this.value">
+      ${inner}
+    </div>`;
+  }).join('');
+}
+function vbChangeType(i,type){(window.vbQs||vbQs)[i].type=type;if(type==='객관식')(window.vbQs||vbQs)[i].opts=['',''];vbQs=window.vbQs||(window.vbQs=vbQs);renderVbQuestions();}
+function vbAddOpt(i){(window.vbQs||vbQs)[i].opts.push('');renderVbQuestions();}
+function vbDelOpt(i,oi){const q=(window.vbQs||vbQs)[i];if(q.opts.length<=1)return;q.opts.splice(oi,1);renderVbQuestions();}
+function vbDelQ(i){(window.vbQs||vbQs).splice(i,1);renderVbQuestions();}
+function vbLoadImg(e,i){
+  const file=e.target.files[0];if(!file)return;
+  const r=new FileReader();r.onload=ev=>{(window.vbQs||vbQs)[i].imgSrc=ev.target.result;renderVbQuestions();};r.readAsDataURL(file);
+}
+
 function admAddVote(){if(window._fbAdmAddVote){window._fbAdmAddVote();return;}alert('Firebase 연결 중...');}
 function admRenderVote(){
   const votes=window.votes||[];
@@ -1952,6 +2011,8 @@ async function initFirebase(){
 
       window.notices = arr;
 
+      console.log('공지 데이터:', window.notices);
+
       renderNotice(window.curNoticeFilter || '전체');
     }
   );
@@ -2006,18 +2067,6 @@ async function initFirebase(){
           window.budgetDepts[data.dept]=data.items||[];
       });
       renderBudget();
-    });
-
-    // ── 학생회 명단 (실시간) ─────────────────────────────
-    onSnapshot(collection(db,'members'), snap=>{
-      if(snap.empty) return; // 없으면 기본 members 배열 유지
-      window.members = snapToArr(snap);
-      renderMembers(window.curDept||'전체');
-    });
-
-    // ── 학생 DB (실시간, 설문 검증용) ───────────────────
-    onSnapshot(collection(db,'students'), snap=>{
-      window.studentDB = snapToArr(snap);
     });
 
     hideLoading();
@@ -2086,26 +2135,9 @@ window.submitVote = async function(vid){
   const v=window.votes.find(x=>x._id===vid||x.id===vid);
   if(!v||v.submitted||v.tag==='종료')return;
   if(v.collectId){
-    const sno=(document.getElementById(`vid-sno-${vid}`)||{}).value.trim()||'';
-    const name=(document.getElementById(`vid-name-${vid}`)||{}).value.trim()||'';
+    const sno=(document.getElementById(`vid-sno-${vid}`)||{}).value||'';
+    const name=(document.getElementById(`vid-name-${vid}`)||{}).value||'';
     if(!sno||!name){alert('학번과 이름을 입력해주세요.');return;}
-    // ── DB 등록 학생 검증 ──
-    const db_students = window.studentDB||[];
-    // students DB에는 설문 참여자도 저장되므로 surveyId 없는 원본 학생만 확인
-    // 기본 학생 DB (일괄 등록된 학생) 존재 여부 확인
-    const registered = db_students.find(s=>
-      String(s.sno||'').trim()===sno && String(s.name||'').trim()===name
-    );
-    if(!registered){
-      const checkEl=document.getElementById(`vid-check-${vid}`);
-      if(checkEl)checkEl.innerHTML='<span style="color:var(--rd)">❌ 학생 DB에 등록되지 않은 학번/이름입니다. 학생회에 문의하세요.</span>';
-      return;
-    }
-    // 중복 참여 확인
-    const alreadyVoted = db_students.find(s=>
-      String(s.sno||'').trim()===sno && s.surveyId===vid
-    );
-    if(alreadyVoted){alert('이미 참여한 설문입니다.');return;}
     // 참여자 저장
     try {
       await addDoc(collection(db,'students'),{
@@ -2472,56 +2504,34 @@ window.exportStudentExcel = async function(){
 };
 
 // ── 앱 시작 ───────────────────────────────────────────────
+// window._fbSubmitPost 즉시 등록 (submitPost() 폴백보다 먼저)
+window._fbSubmitPost = async function(){
+  const t=document.getElementById('mttl').value.trim();
+  const b=document.getElementById('mbdy').value.trim();
+  const c=document.getElementById('mcat').value;
+  if(!t||!b){alert('제목과 내용을 입력해주세요.');return;}
+  showLoading('건의 등록 중...');
+  try {
+    await addDoc(collection(db,'posts'),{
+      privacy: window.mPriv||'public',
+      cat:c, title:t, body:b,
+      author:'익명', date:window.todayStr(),
+      likes:0, comments:[], adminReply:null, answered:false,
+      createdAt: serverTimestamp()
+    });
+    document.getElementById('mo').classList.remove('on');
+    document.getElementById('mttl').value='';
+    document.getElementById('mbdy').value='';
+    alert('건의가 등록되었습니다! 학생회가 7일 이내 답변드립니다.');
+  } catch(e){
+    alert('등록 실패: '+e.message);
+  } finally { hideLoading(); }
+};
+
 initFirebase();
 
-// ══════════════════════════════════════════════════════════
-//  학생회 명단 — Firebase 관리 (신규)
-// ══════════════════════════════════════════════════════════
-window.admSaveMember = async function(idx){
-  const mList = window.members||[];
-  const m = mList[idx];
-  if(!m)return;
-  const nameEl = document.getElementById(`mem-name-${idx}`);
-  const gradeEl = document.getElementById(`mem-grade-${idx}`);
-  const worksEl = document.getElementById(`mem-works-${idx}`);
-  if(nameEl) m.name = nameEl.value.trim();
-  if(gradeEl) m.grade = gradeEl.value.trim();
-  if(worksEl) m.works = worksEl.value.trim();
-  showLoading('저장 중...');
-  try {
-    if(m._id){
-      await updateDoc(doc(db,'members',m._id),{name:m.name,grade:m.grade,works:m.works});
-    } else {
-      // 최초 등록 (기본 members 배열 기반)
-      const docRef = await addDoc(collection(db,'members'),{
-        name:m.name, role:m.role, roleKey:m.roleKey,
-        dept:m.dept, grade:m.grade, av:m.av, works:m.works
-      });
-      m._id = docRef.id;
-    }
-    alert('저장되었습니다!');
-    renderMembers(window.curDept||'전체');
-    admRenderMembersAdmin();
-  } catch(e){ alert('저장 실패: '+e.message); }
-  finally{ hideLoading(); }
-};
-
-window.admRenderMembersAdmin = function(){
-  const mList = window.members||members;
-  const el = document.getElementById('admMembersBody');
-  if(!el) return;
-  el.innerHTML = mList.map((m,i)=>`<tr>
-    <td style="color:var(--at3)">${esc(m.dept)}</td>
-    <td style="color:var(--ac)">${esc(m.role)}</td>
-    <td><input id="mem-name-${i}" class="adm-fi" value="${esc(m.name||'')}" placeholder="이름" style="padding:5px 8px;font-size:12px;width:80px;"></td>
-    <td><input id="mem-grade-${i}" class="adm-fi" value="${esc(m.grade||'')}" placeholder="예) 2-3" style="padding:5px 8px;font-size:12px;width:70px;"></td>
-    <td><input id="mem-works-${i}" class="adm-fi" value="${esc(m.works||'')}" placeholder="연락처/링크" style="padding:5px 8px;font-size:12px;width:130px;"></td>
-    <td><button class="adm-edit-btn" onclick="admSaveMember(${i})">저장</button></td>
-  </tr>`).join('');
-};
-
 // ── window._fb 별칭 등록 (일반 script에서 호출 가능하도록) ──
-window._fbSubmitPost      = window.submitPost;
+// window._fbSubmitPost는 위에서 직접 정의됨
 window._fbLikeP           = window.likeP;
 window._fbAddCmt          = window.addCmt;
 window._fbAdmSendReply    = window.admSendReply;
