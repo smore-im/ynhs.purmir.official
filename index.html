@@ -1270,6 +1270,7 @@ function renderPost(p){
   </div>`;
 }
 function likeP(id,btn){
+  if(window._fbLikeP){window._fbLikeP(id,btn);return;}
   if(btn.disabled)return;
   const p=posts.find(x=>x.id===id);
   if(!p)return;
@@ -1277,6 +1278,7 @@ function likeP(id,btn){
   btn.classList.add('liked');btn.textContent='♥ '+p.likes;btn.disabled=true;
 }
 function addCmt(id){
+  if(window._fbAddCmt){window._fbAddCmt(id);return;}
   const inp=document.getElementById('ci-'+id);
   const t=inp.value.trim();
   if(!t)return;
@@ -1388,6 +1390,7 @@ function selectOpt(vid,qi,optIdx){
   renderVotes();
 }
 function submitVote(vid){
+  if(window._fbSubmitVote){window._fbSubmitVote(vid);return;}
   const v=votes.find(x=>x.id===vid);
   if(!v||v.submitted||v.tag==='종료')return;
   if(v.collectId){
@@ -1557,6 +1560,7 @@ function setP(v){
   document.getElementById('ppri').classList.toggle('on',v==='private');
 }
 function submitPost(){
+  if(window._fbSubmitPost){window._fbSubmitPost();return;}
   const t=document.getElementById('mttl').value.trim();
   const b=document.getElementById('mbdy').value.trim();
   const c=document.getElementById('mcat').value;
@@ -1661,54 +1665,23 @@ function admRenderPosts(){
     </tr>`).join('')
     :'<tr><td colspan="7" style="text-align:center;color:var(--at3);padding:24px">건의사항이 없습니다.</td></tr>';
 }
-function admTogglePrivacy(id){const p=posts.find(x=>x.id===id);if(p)p.privacy=p.privacy==='private'?'public':'private';admRenderPosts();renderPosts(pf,ps);}
+// ── 관리자 함수 래퍼 (Firebase 연동) ─────────────────────
+// Firebase 모듈이 로드되면 window._fb* 로 교체됩니다
+function admTogglePrivacy(id){if(window._fbAdmTogglePrivacy)window._fbAdmTogglePrivacy(id);else{const p=posts.find(x=>x.id===id);if(p)p.privacy=p.privacy==='private'?'public':'private';admRenderPosts();renderPosts(pf,ps);}}
 function admOpenReply(id,isEdit){
-  const p=posts.find(x=>x.id===id);if(!p)return;
+  const p=(window.posts||posts).find(x=>(x._id||x.id)===id||(x._id||x.id)===String(id));if(!p)return;
   document.getElementById('admReplyArea').innerHTML=`<div class="adm-form" style="margin-top:16px">
     <h3>💬 ${isEdit?'답변 수정':'답변 작성'} — "${esc(p.privacy==='private'?'비공개 글':p.title)}"</h3>
     ${p.privacy==='private'?`<div style="background:var(--ab);border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;color:var(--at3);white-space:pre-wrap">${esc(p.body)}</div>`:''}
-    <textarea class="rep-area" id="replyTxt-${id}">${esc(isEdit?p.adminReply:'')}</textarea><br>
-    <button class="rep-send" onclick="admSendReply(${id})">${isEdit?'수정 저장':'답변 등록'}</button>
+    <textarea class="rep-area" id="replyTxt-${p._id||p.id}">${esc(isEdit?p.adminReply:'')}</textarea><br>
+    <button class="rep-send" onclick="admSendReply('${p._id||p.id}')">${isEdit?'수정 저장':'답변 등록'}</button>
     <button class="rep-cancel" onclick="document.getElementById('admReplyArea').innerHTML=''">취소</button>
   </div>`;
   document.getElementById('admReplyArea').scrollIntoView({behavior:'smooth'});
 }
-function admSendReply(id){
-  const txt=document.getElementById('replyTxt-'+id).value.trim();
-  if(!txt){alert('답변 내용을 입력해주세요.');return;}
-  const p=posts.find(x=>x.id===id);
-  if(p){p.adminReply=txt;p.answered=true;}
-  admRenderPosts();renderPosts(pf,ps);
-  document.getElementById('admReplyArea').innerHTML='';
-  alert('답변이 등록되었습니다!');
-}
-function admDelPost(id){
-  if(!confirm('이 건의를 삭제하시겠습니까?'))return;
-  const idx=posts.findIndex(x=>x.id===id);
-  if(idx>-1)posts.splice(idx,1);
-  admRenderPosts();
-}
-
-// ── 공지 관리 ──
-function admSaveNotice(){
-  const cat=document.getElementById('adm-ncat').value;
-  const ttl=document.getElementById('adm-nttl').value.trim();
-  const bdy=document.getElementById('adm-nbdy').value.trim();
-  if(!ttl)return alert('제목을 입력해주세요.');
-  const today=todayStr();
-  const editIdx=parseInt(document.getElementById('adm-nedit-idx').value);
-  const fileInput=document.getElementById('adm-nfile');
-  const fileNames=fileInput.files.length?Array.from(fileInput.files).map(f=>f.name):[];
-  if(editIdx>=0&&editIdx<notices.length){
-    const n=notices[editIdx];
-    n.cat=cat;n.title=ttl;n.body=bdy;n.editDate=today;n.isNew=true;
-    if(fileNames.length)n.files=[...(n.files||[]),...fileNames];
-  } else {
-    notices.unshift({cat,title:ttl,body:bdy,date:today,editDate:null,isNew:true,files:fileNames});
-  }
-  admCancelNoticeEdit();admRenderNotice();
-  alert(editIdx>=0?'공지가 수정되었습니다!':'공지가 등록되었습니다!');
-}
+function admSendReply(id){if(window._fbAdmSendReply){window._fbAdmSendReply(id);return;}alert('Firebase 연결 중...');}
+function admDelPost(id){if(window._fbAdmDelPost){window._fbAdmDelPost(id);return;}if(!confirm('삭제?'))return;const idx=posts.findIndex(x=>x.id===id);if(idx>-1)posts.splice(idx,1);admRenderPosts();}
+function admSaveNotice(){if(window._fbAdmSaveNotice){window._fbAdmSaveNotice();return;}alert('Firebase 연결 중...');}
 function admCancelNoticeEdit(){
   document.getElementById('adm-nedit-idx').value='-1';
   document.getElementById('adm-nttl').value='';
@@ -1720,158 +1693,62 @@ function admCancelNoticeEdit(){
   document.querySelector('#noticeFormWrap .adm-submit').textContent='공지 등록';
 }
 function admEditNotice(i){
+  const notices=window.notices||[];
   const n=notices[i];if(!n)return;
   document.getElementById('adm-nedit-idx').value=i;
   document.getElementById('adm-ncat').value=n.cat;
   document.getElementById('adm-nttl').value=n.title;
   document.getElementById('adm-nbdy').value=n.body||'';
-  document.getElementById('adm-nfile-list').textContent=(n.files&&n.files.length)?`기존 첨부: ${n.files.join(', ')}`:'' ;
+  document.getElementById('adm-nfile-list').textContent=(n.files&&n.files.length)?`기존 첨부: ${n.files.map(f=>f.name||f).join(', ')}`:'';
   document.getElementById('noticeFormTitle').textContent='✏ 공지 수정';
   document.getElementById('noticeCancelBtn').style.display='inline-block';
   document.querySelector('#noticeFormWrap .adm-submit').textContent='수정 저장';
   document.getElementById('noticeFormWrap').scrollIntoView({behavior:'smooth'});
 }
 function admRenderNotice(){
+  const notices=window.notices||[];
   document.getElementById('admNoticeBody').innerHTML=notices.length
     ?notices.map((n,i)=>`<tr>
       <td><span class="nbadge nb-${esc(n.cat)}">${esc(n.cat)}</span></td>
       <td style="color:var(--at1)">${esc(n.title)}${n.isNew?'<span style="color:var(--ac);font-size:10px;margin-left:5px">NEW</span>':''}</td>
-      <td style="color:var(--at3);font-size:12px;white-space:nowrap">${n.date}</td>
+      <td style="color:var(--at3);font-size:12px;white-space:nowrap">${n.date||''}</td>
       <td style="font-size:12px;white-space:nowrap">${n.editDate?`<span style="color:var(--ac)">${n.editDate}</span>`:'-'}</td>
       <td><button class="adm-edit-btn" onclick="admEditNotice(${i})">수정</button></td>
       <td><button class="adm-del" onclick="admDelNotice(${i})">삭제</button></td>
     </tr>`).join('')
     :'<tr><td colspan="6" style="text-align:center;color:var(--at3);padding:24px">등록된 공지가 없습니다.</td></tr>';
-  renderNotice(curNoticeFilter);
+  renderNotice(curNoticeFilter||'전체');
 }
-function admDelNotice(i){if(!confirm('삭제하시겠습니까?'))return;notices.splice(i,1);admRenderNotice();}
-document.getElementById('adm-nfile').addEventListener('change',function(){
-  document.getElementById('adm-nfile-list').textContent=this.files.length?`선택: ${Array.from(this.files).map(f=>f.name).join(', ')}`:'' ;
-});
-
-// ── 투표 빌더 ──
-let vbQs=[];
-function vbAddQ(type){
-  vbQs.push({type,text:'',opts:type==='객관식'?['','']:[],placeholder:'의견을 자유롭게 작성해주세요.',imgSrc:null});
-  renderVbQuestions();
-}
-function renderVbQuestions(){
-  document.getElementById('vbQuestions').innerHTML=vbQs.map((q,i)=>{
-    let inner='';
-    if(q.type==='객관식'){
-      inner=`<div class="vb-opt-list">${q.opts.map((o,oi)=>`<div class="vb-opt-row">
-        <input class="vb-opt-input" value="${esc(o)}" placeholder="선지 ${oi+1}" oninput="vbQs[${i}].opts[${oi}]=this.value">
-        <button class="vb-del-opt" onclick="vbDelOpt(${i},${oi})">✕</button>
-      </div>`).join('')}</div>
-      <button class="vb-add-opt" onclick="vbAddOpt(${i})">＋ 선지 추가</button>`;
-    } else if(q.type==='주관식'){
-      inner=`<input class="adm-fi" style="margin-top:8px" value="${esc(q.placeholder)}" placeholder="안내 문구 (예: 의견을 적어주세요)" oninput="vbQs[${i}].placeholder=this.value">`;
-    } else if(q.type==='사진'){
-      inner=`<input type="file" accept="image/*" class="adm-fi" style="padding:6px;cursor:pointer;margin-top:8px" onchange="vbLoadImg(event,${i})">${q.imgSrc?`<img src="${q.imgSrc}" class="vb-img-preview">`:''}`;
-    }
-    const typeBtns=['객관식','주관식','사진'].map(t=>`<button class="vb-type-btn ${q.type===t?'on':''}" onclick="vbChangeType(${i},'${t}')">${t}</button>`).join('');
-    return `<div class="vb-question">
-      <button class="vb-del-q" onclick="vbDelQ(${i})">✕ 삭제</button>
-      <div style="font-size:12px;color:var(--at3);margin-bottom:8px;font-weight:600">문항 ${i+1}</div>
-      <div class="vb-q-type">${typeBtns}</div>
-      <input class="adm-fi" value="${esc(q.text)}" placeholder="문항 내용 입력" oninput="vbQs[${i}].text=this.value">
-      ${inner}
-    </div>`;
-  }).join('');
-}
-function vbChangeType(i,type){vbQs[i].type=type;if(type==='객관식')vbQs[i].opts=['',''];renderVbQuestions();}
-function vbAddOpt(i){vbQs[i].opts.push('');renderVbQuestions();}
-function vbDelOpt(i,oi){if(vbQs[i].opts.length<=1)return;vbQs[i].opts.splice(oi,1);renderVbQuestions();}
-function vbDelQ(i){vbQs.splice(i,1);renderVbQuestions();}
-function vbLoadImg(e,i){
-  const file=e.target.files[0];if(!file)return;
-  const r=new FileReader();r.onload=ev=>{vbQs[i].imgSrc=ev.target.result;renderVbQuestions();};r.readAsDataURL(file);
-}
-function admAddVote(){
-  const ttl=document.getElementById('adm-vttl').value.trim();
-  if(!ttl)return alert('설문 제목을 입력해주세요.');
-  if(!vbQs.length)return alert('문항을 1개 이상 추가해주세요.');
-  const collectId=document.getElementById('vb-id-toggle').checked;
-  const questions=vbQs.map(q=>{
-    const qd={type:q.type,text:q.text};
-    if(q.type==='객관식'){qd.opts=q.opts.filter(o=>o.trim());if(!qd.opts.length)qd.opts=['선택지 1'];qd.votes=qd.opts.map(()=>0);qd.selected=null;}
-    else if(q.type==='주관식'){qd.placeholder=q.placeholder;qd.answers=[];qd.myAnswer='';}
-    else if(q.type==='사진'){qd.imgSrc=q.imgSrc;}
-    return qd;
-  });
-  votes.unshift({id:Date.now(),tag:'진행',title:ttl,collectId,participants:[],submitted:false,questions,total:0});
-  document.getElementById('adm-vttl').value='';
-  document.getElementById('vb-id-toggle').checked=false;
-  vbQs=[];renderVbQuestions();admRenderVote();
-  alert('설문이 등록되었습니다!');
-}
+function admDelNotice(i){if(window._fbAdmDelNotice){window._fbAdmDelNotice(i);return;}if(!confirm('삭제?'))return;const notices=window.notices||[];notices.splice(i,1);admRenderNotice();}
+function admAddVote(){if(window._fbAdmAddVote){window._fbAdmAddVote();return;}alert('Firebase 연결 중...');}
 function admRenderVote(){
+  const votes=window.votes||[];
   document.getElementById('admVoteParticipants').innerHTML='';
   document.getElementById('admVoteBody').innerHTML=votes.length
     ?votes.map((v,i)=>`<tr>
       <td style="color:var(--at1)">${esc(v.title)}</td>
       <td><span class="adm-badge ${v.tag==='진행'?'ab-ans':'ab-end'}">${v.tag}</span></td>
-      <td style="color:var(--at3)">${v.total}명</td>
-      <td><span style="font-size:11px;color:${v.collectId?'var(--ac)':'var(--at3)'}">${v.collectId?`✔ ${v.participants.length}명`:'미수집'}</span></td>
-      <td>${v.collectId&&v.participants.length?`<button class="adm-edit-btn" onclick="admShowParticipants(${i})">명단 보기</button>`:'-'}</td>
+      <td style="color:var(--at3)">${v.total||0}명</td>
+      <td><span style="font-size:11px;color:${v.collectId?'var(--ac)':'var(--at3)'}">${v.collectId?`✔ ${(v.participants||[]).length}명`:'미수집'}</span></td>
+      <td>${v.collectId&&(v.participants||[]).length?`<button class="adm-edit-btn" onclick="admShowParticipants(${i})">명단 보기</button>`:'-'}</td>
       <td><button class="rep-send" style="font-size:11px" onclick="admToggleVote(${i})">${v.tag==='진행'?'마감':'재개'}</button></td>
       <td><button class="adm-del" onclick="admDelVote(${i})">삭제</button></td>
     </tr>`).join('')
     :'<tr><td colspan="7" style="text-align:center;color:var(--at3);padding:24px">등록된 설문이 없습니다.</td></tr>';
 }
-function admShowParticipants(i){
-  const v=votes[i];
-  document.getElementById('admVoteParticipants').innerHTML=`<div class="adm-table-wrap" style="margin-top:16px">
-    <div class="adm-table-header"><h3>참여자 명단 — ${esc(v.title)}</h3></div>
-    <table class="adm-table">
-      <thead><tr><th>학번</th><th>이름</th><th>참여일</th></tr></thead>
-      <tbody>${v.participants.length
-        ?v.participants.map(p=>`<tr><td>${esc(p.sno)}</td><td>${esc(p.name)}</td><td>${esc(p.date||'-')}</td></tr>`).join('')
-        :'<tr><td colspan="3" style="text-align:center;color:var(--at3);padding:16px">참여자 없음</td></tr>'
-      }</tbody>
-    </table>
-  </div>`;
-  document.getElementById('admVoteParticipants').scrollIntoView({behavior:'smooth'});
-}
-function admToggleVote(i){votes[i].tag=votes[i].tag==='진행'?'종료':'진행';admRenderVote();}
-function admDelVote(i){if(!confirm('삭제하시겠습니까?'))return;votes.splice(i,1);admRenderVote();}
-
-// ── 행사 관리 ──
-function admAddEvent(){
-  const mo=parseInt(document.getElementById('adm-emo').value);
-  const dy=parseInt(document.getElementById('adm-edy').value);
-  if(!mo||!dy){alert('월과 일을 입력해주세요.');return;}
-  const emoE=parseInt(document.getElementById('adm-emo-e').value)||mo;
-  const edyE=parseInt(document.getElementById('adm-edy-e').value)||dy;
-  const ts=document.getElementById('adm-etime-s').value;
-  const te=document.getElementById('adm-etime-e').value;
-  const place=document.getElementById('adm-eplace').value.trim();
-  const ttl=document.getElementById('adm-ettl').value.trim();
-  if(!ttl){alert('행사명을 입력해주세요.');return;}
-  const content=document.getElementById('adm-econtent').value.trim();
-  const desc=document.getElementById('adm-edesc').value.trim();
-  const tagRadio=document.querySelector('input[name="etag"]:checked');
-  let tag=tagRadio?tagRadio.value:'행사';
-  if(tag==='기타'){const inp=document.getElementById('etagOtherInp').value.trim();if(inp)tag=inp;}
-  events.push({startMonth:mo,startDay:dy,endMonth:emoE,endDay:edyE,timeStart:ts,timeEnd:te,place,title:ttl,content,desc:desc||(place||ttl),tag});
-  events.sort((a,b)=>(a.startMonth*100+a.startDay)-(b.startMonth*100+b.startDay));
-  ['adm-emo','adm-edy','adm-emo-e','adm-edy-e','adm-etime-s','adm-etime-e','adm-eplace','adm-ettl','adm-econtent','adm-edesc'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-  document.getElementById('etagOtherInp').style.display='none';
-  admRenderEvents();renderEvts();renderCal();alert('행사가 등록되었습니다!');
-}
-document.querySelectorAll('input[name="etag"]').forEach(r=>r.addEventListener('change',function(){
-  document.getElementById('etagOtherInp').style.display=this.value==='기타'?'inline-block':'none';
-}));
+function admShowParticipants(i){const v=(window.votes||[])[i];if(!v)return;document.getElementById('admVoteParticipants').innerHTML=`<div class="adm-table-wrap" style="margin-top:16px"><div class="adm-table-header"><h3>참여자 명단 — ${esc(v.title)}</h3></div><table class="adm-table"><thead><tr><th>학번</th><th>이름</th><th>참여일</th></tr></thead><tbody>${(v.participants||[]).length?(v.participants||[]).map(p=>`<tr><td>${esc(p.sno)}</td><td>${esc(p.name)}</td><td>${esc(p.date||'-')}</td></tr>`).join(''):'<tr><td colspan="3" style="text-align:center;color:var(--at3);padding:16px">참여자 없음</td></tr>'}</tbody></table></div>`;document.getElementById('admVoteParticipants').scrollIntoView({behavior:'smooth'});}
+function admToggleVote(i){if(window._fbAdmToggleVote){window._fbAdmToggleVote(i);return;}const votes=window.votes||[];if(votes[i])votes[i].tag=votes[i].tag==='진행'?'종료':'진행';admRenderVote();}
+function admDelVote(i){if(window._fbAdmDelVote){window._fbAdmDelVote(i);return;}if(!confirm('삭제?'))return;const votes=window.votes||[];votes.splice(i,1);admRenderVote();}
+function admAddEvent(){if(window._fbAdmAddEvent){window._fbAdmAddEvent();return;}alert('Firebase 연결 중...');}
 function admRenderEvents(){
+  const events=window.events||[];
   document.getElementById('admEvtBody').innerHTML=events.length
     ?events.map((e,i)=>{
       const em=e.endMonth||e.startMonth,ed=e.endDay||e.startDay;
       const isM=em!==e.startMonth||ed!==e.startDay;
-      const dateStr=isM?`${e.startMonth}/${e.startDay}~${em}/${ed}`:`${e.startMonth}월 ${e.startDay}일`;
-      const timeStr=e.timeStart?(e.timeEnd?`${e.timeStart}~${e.timeEnd}`:`${e.timeStart}~`):'-';
       return `<tr>
-        <td style="color:var(--ac);white-space:nowrap">${dateStr}</td>
-        <td style="color:var(--at3);white-space:nowrap">${timeStr}</td>
+        <td style="color:var(--ac);white-space:nowrap">${isM?`${e.startMonth}/${e.startDay}~${em}/${ed}`:`${e.startMonth}월 ${e.startDay}일`}</td>
+        <td style="color:var(--at3);white-space:nowrap">${e.timeStart?(e.timeEnd?`${e.timeStart}~${e.timeEnd}`:`${e.timeStart}~`):'-'}</td>
         <td style="color:var(--at3)">${esc(e.place)||'-'}</td>
         <td style="color:var(--at1)">${esc(e.title)}</td>
         <td><span class="evt-tag tag-${esc(e.tag)}" style="font-size:10px">${esc(e.tag)}</span></td>
@@ -1880,41 +1757,10 @@ function admRenderEvents(){
     }).join('')
     :'<tr><td colspan="6" style="text-align:center;color:var(--at3);padding:24px">등록된 행사가 없습니다.</td></tr>';
 }
-function admDelEvent(i){if(!confirm('삭제하시겠습니까?'))return;events.splice(i,1);admRenderEvents();renderEvts();renderCal();}
-
-// ── 갤러리 관리 ──
-let pendingGalleryFiles=[];
-function previewGalleryImages(){
-  const files=Array.from(document.getElementById('adm-gimgs').files);
-  const wrap=document.getElementById('adm-gimg-preview');
-  wrap.innerHTML='';pendingGalleryFiles=[];
-  files.forEach(file=>{
-    const r=new FileReader();
-    r.onload=ev=>{
-      pendingGalleryFiles.push({src:ev.target.result,name:file.name});
-      const img=document.createElement('img');
-      img.src=ev.target.result;
-      img.style.cssText='width:80px;height:60px;object-fit:cover;border-radius:5px;border:1px solid var(--br2)';
-      wrap.appendChild(img);
-    };r.readAsDataURL(file);
-  });
-}
-function admAddGallery(){
-  const lbl=document.getElementById('adm-glbl').value.trim();
-  const cat=document.getElementById('adm-gcat').value;
-  if(!lbl)return alert('설명을 입력해주세요.');
-  if(pendingGalleryFiles.length){
-    pendingGalleryFiles.forEach(f=>{gallery.unshift({src:f.src,emoji:'🖼',label:lbl||f.name,cat});});
-  } else {
-    gallery.unshift({src:null,emoji:'📷',label:lbl,cat});
-  }
-  document.getElementById('adm-glbl').value='';
-  document.getElementById('adm-gimg-preview').innerHTML='';
-  document.getElementById('adm-gimgs').value='';
-  pendingGalleryFiles=[];
-  admRenderGallery();renderGallery(gCurFilter);alert('갤러리에 추가되었습니다!');
-}
+function admDelEvent(i){if(window._fbAdmDelEvent){window._fbAdmDelEvent(i);return;}if(!confirm('삭제?'))return;const events=window.events||[];events.splice(i,1);admRenderEvents();renderEvts();renderCal();}
+function admAddGallery(){if(window._fbAdmAddGallery){window._fbAdmAddGallery();return;}alert('Firebase 연결 중...');}
 function admRenderGallery(){
+  const gallery=window.gallery||[];
   const cnt=gallery.length;
   document.getElementById('galleryCount').textContent=cnt;
   document.getElementById('admGalleryGrid').innerHTML=cnt
@@ -1926,47 +1772,32 @@ function admRenderGallery(){
     </div>`).join('')
     :'<div style="padding:24px;color:var(--at3);text-align:center;width:100%">갤러리가 비어 있습니다.</div>';
 }
-function admDelGallery(i){if(!confirm('삭제하시겠습니까?'))return;gallery.splice(i,1);admRenderGallery();renderGallery(gCurFilter);}
-
-// ── 예산 관리 ──
-let admCurBudgetDept='회장단';
+function admDelGallery(i){if(window._fbAdmDelGallery){window._fbAdmDelGallery(i);return;}if(!confirm('삭제?'))return;const gallery=window.gallery||[];gallery.splice(i,1);admRenderGallery();renderGallery(gCurFilter);}
 function admRenderBudget(){
   admCurBudgetDept=document.getElementById('adm-bdept').value||'회장단';
   renderBudgetRows();
 }
 function renderBudgetRows(){
-  const items=budgetDepts[admCurBudgetDept]||[];
+  const items=(window.budgetDepts||budgetDepts)[admCurBudgetDept]||[];
   document.getElementById('admBudgetRows').innerHTML=items.length
     ?items.map((b,i)=>`<div class="adm-budget-row">
-      <input value="${esc(b.item)}" placeholder="항목명" oninput="budgetDepts['${admCurBudgetDept}'][${i}].item=this.value">
-      <select onchange="budgetDepts['${admCurBudgetDept}'][${i}].cat=this.value">
+      <input value="${esc(b.item)}" placeholder="항목명" oninput="(window.budgetDepts||budgetDepts)['${admCurBudgetDept}'][${i}].item=this.value">
+      <select onchange="(window.budgetDepts||budgetDepts)['${admCurBudgetDept}'][${i}].cat=this.value">
         <option ${b.cat==='지출'?'selected':''}>지출</option>
         <option ${b.cat==='수입'?'selected':''}>수입</option>
       </select>
-      <input type="number" value="${b.amount||0}" placeholder="금액" oninput="budgetDepts['${admCurBudgetDept}'][${i}].amount=parseInt(this.value)||0">
-      <input type="number" value="${b.pct||0}" min="0" max="100" placeholder="%" oninput="budgetDepts['${admCurBudgetDept}'][${i}].pct=Math.min(100,parseInt(this.value)||0)">
+      <input type="number" value="${b.amount||0}" oninput="(window.budgetDepts||budgetDepts)['${admCurBudgetDept}'][${i}].amount=parseInt(this.value)||0">
+      <input type="number" value="${b.pct||0}" min="0" max="100" oninput="(window.budgetDepts||budgetDepts)['${admCurBudgetDept}'][${i}].pct=Math.min(100,parseInt(this.value)||0)">
       <button class="adm-del" onclick="admDelBudgetRow(${i})">삭제</button>
     </div>`).join('')
-    :'<div style="color:var(--at3);font-size:13px;padding:12px 0">항목이 없습니다. 아래 버튼으로 추가하세요.</div>';
+    :'<div style="color:var(--at3);font-size:13px;padding:12px 0">항목 없음. 아래 버튼으로 추가하세요.</div>';
 }
-function admAddBudgetRow(){
-  if(!budgetDepts[admCurBudgetDept])budgetDepts[admCurBudgetDept]=[];
-  budgetDepts[admCurBudgetDept].push({item:'새 항목',cat:'지출',amount:0,pct:0,note:''});
-  renderBudgetRows();
-}
-function admDelBudgetRow(i){budgetDepts[admCurBudgetDept].splice(i,1);renderBudgetRows();}
-function admSaveBudget(){renderBudget();alert('예산이 저장되었습니다!');}
-
-// ── FAQ 관리 ──
-function admAddFaq(){
-  const q=document.getElementById('adm-fq').value.trim();
-  const a=document.getElementById('adm-fa').value.trim();
-  if(!q||!a)return alert('질문과 답변을 모두 입력해주세요.');
-  faqs.push({q,a});
-  document.getElementById('adm-fq').value='';document.getElementById('adm-fa').value='';
-  admRenderFaq();renderFaq();alert('FAQ가 추가되었습니다!');
-}
+function admAddBudgetRow(){const bd=window.budgetDepts||budgetDepts;if(!bd[admCurBudgetDept])bd[admCurBudgetDept]=[];bd[admCurBudgetDept].push({item:'새 항목',cat:'지출',amount:0,pct:0,note:''});renderBudgetRows();}
+function admDelBudgetRow(i){const bd=window.budgetDepts||budgetDepts;bd[admCurBudgetDept].splice(i,1);renderBudgetRows();}
+function admSaveBudget(){if(window._fbAdmSaveBudget){window._fbAdmSaveBudget();return;}renderBudget();alert('저장되었습니다(로컬).');}
+function admAddFaq(){if(window._fbAdmAddFaq){window._fbAdmAddFaq();return;}alert('Firebase 연결 중...');}
 function admRenderFaq(){
+  const faqs=window.faqs||[];
   const el=document.getElementById('admFaqList');
   el.innerHTML=faqs.length
     ?faqs.map((f,i)=>`<div class="adm-faq-item">
@@ -1978,109 +1809,20 @@ function admRenderFaq(){
         </div>
       </div>
       <div class="adm-faq-lbl" style="margin-bottom:4px">질문</div>
-      <textarea rows="2" oninput="faqs[${i}].q=this.value">${esc(f.q)}</textarea>
+      <textarea rows="2" oninput="(window.faqs||faqs)[${i}].q=this.value">${esc(f.q)}</textarea>
       <div class="adm-faq-lbl" style="margin-top:8px;margin-bottom:4px">답변</div>
-      <textarea rows="3" oninput="faqs[${i}].a=this.value">${esc(f.a)}</textarea>
+      <textarea rows="3" oninput="(window.faqs||faqs)[${i}].a=this.value">${esc(f.a)}</textarea>
     </div>`).join('')
     :'<div style="color:var(--at3);text-align:center;padding:24px">등록된 FAQ가 없습니다.</div>';
 }
-function admDelFaq(i){if(!confirm('삭제하시겠습니까?'))return;faqs.splice(i,1);admRenderFaq();renderFaq();}
-function admSaveFaqItem(i){renderFaq();alert('저장되었습니다!');}
+function admDelFaq(i){if(window._fbAdmDelFaq){window._fbAdmDelFaq(i);return;}if(!confirm('삭제?'))return;const faqs=window.faqs||[];faqs.splice(i,1);admRenderFaq();renderFaq();}
+function admSaveFaqItem(i){if(window._fbAdmSaveFaq){window._fbAdmSaveFaq(i);return;}renderFaq();alert('저장(로컬).');}
+function admRenderStudents(){if(window._fbAdmRenderStudents){window._fbAdmRenderStudents();return;}document.getElementById('admStudentsBody').innerHTML='<tr><td colspan="5" style="text-align:center;color:var(--at3);padding:24px">Firebase 연결 후 표시됩니다.</td></tr>';}
+function admDelStudent(i){if(window._fbAdmDelStudent){window._fbAdmDelStudent(i);}}
+function admClearOrphanStudents(){if(window._fbAdmClearOrphans){window._fbAdmClearOrphans();return;}alert('Firebase 연결 중...');}
+function exportStudentExcel(){if(window._fbExportExcel){window._fbExportExcel();return;}alert('Firebase 연결 중...');}
+function importStudentExcel(input){if(window._fbImportExcel){window._fbImportExcel(input);return;}alert('Firebase 연결 중...');}
 
-// ══════════════════════════════════════════════════════════
-//  학생 DB — 엑셀 내보내기 / 가져오기
-// ══════════════════════════════════════════════════════════
-function admRenderStudents(){
-  const snoF=(document.getElementById('adm-sno-filter')||{}).value||'';
-  const nameF=(document.getElementById('adm-sname-filter')||{}).value||'';
-  const list=studentDB.filter(s=>
-    String(s.sno||'').includes(snoF)&&String(s.name||'').includes(nameF)
-  );
-  document.getElementById('studentCount').textContent=studentDB.length;
-  document.getElementById('admStudentsBody').innerHTML=list.length
-    ?list.map((s,i)=>{
-      const realIdx=studentDB.indexOf(s);
-      return `<tr>
-        <td style="color:var(--at1)">${esc(s.sno)}</td>
-        <td style="color:var(--at1)">${esc(s.name)}</td>
-        <td style="color:var(--at3)">${esc(s.surveyTitle||'-')}</td>
-        <td style="color:var(--at3);white-space:nowrap">${esc(s.date||'-')}</td>
-        <td><button class="adm-del" onclick="admDelStudent(${realIdx})">삭제</button></td>
-      </tr>`;
-    }).join('')
-    :'<tr><td colspan="5" style="text-align:center;color:var(--at3);padding:24px">등록된 학생 정보가 없습니다.</td></tr>';
-}
-function admDelStudent(i){
-  if(!confirm('삭제하시겠습니까?'))return;
-  studentDB.splice(i,1);admRenderStudents();
-}
-function admClearOrphanStudents(){
-  const activeIds=new Set(votes.map(v=>v.id));
-  const before=studentDB.length;
-  studentDB=studentDB.filter(s=>!s.surveyId||activeIds.has(s.surveyId));
-  alert(`미매핑 항목 ${before-studentDB.length}건 정리 완료`);admRenderStudents();
-}
-
-// 엑셀 내보내기 (SheetJS)
-function exportStudentExcel(){
-  if(!studentDB.length){alert('내보낼 학생 데이터가 없습니다.');return;}
-  if(typeof XLSX==='undefined'){alert('엑셀 라이브러리가 로드되지 않았습니다. 인터넷 연결을 확인해주세요.');return;}
-  const rows=studentDB.map(s=>({
-    '학번': s.sno||'',
-    '이름': s.name||'',
-    '참여 설문': s.surveyTitle||'',
-    '참여일': s.date||''
-  }));
-  const ws=XLSX.utils.json_to_sheet(rows);
-  // 컬럼 너비
-  ws['!cols']=[{wch:12},{wch:10},{wch:30},{wch:14}];
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,'학생DB',ws);
-  XLSX.writeFile(wb,`용남고학생회_학생DB_${todayStr().replace(/\./g,'')}.xlsx`);
-}
-
-// 엑셀 일괄 등록 (SheetJS)
-function importStudentExcel(input){
-  const file=input.files[0];if(!file)return;
-  if(typeof XLSX==='undefined'){alert('엑셀 라이브러리가 로드되지 않았습니다.');return;}
-  const reader=new FileReader();
-  reader.onload=function(e){
-    try{
-      const data=new Uint8Array(e.target.result);
-      const wb=XLSX.read(data,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-      if(!rows.length){alert('데이터가 없습니다.');return;}
-      let startRow=0;
-      // 헤더 감지: 첫 행에 '학번' 또는 '이름' 포함하면 헤더로 간주
-      const firstRow=rows[0].map(c=>String(c).trim());
-      const hasHeader=firstRow.some(c=>c==='학번'||c==='이름'||c==='학번/이름');
-      if(hasHeader)startRow=1;
-      let added=0;
-      for(let i=startRow;i<rows.length;i++){
-        const row=rows[i];
-        const sno=String(row[0]||'').trim();
-        const name=String(row[1]||'').trim();
-        if(!sno&&!name)continue;
-        studentDB.push({
-          sno,name,
-          surveyTitle:String(row[2]||'일괄 등록').trim(),
-          date:String(row[3]||todayStr()).trim(),
-          surveyId:null
-        });
-        added++;
-      }
-      input.value='';
-      admRenderStudents();
-      alert(`${added}명 등록 완료!`);
-    }catch(err){
-      alert('파일을 읽는 중 오류가 발생했습니다: '+err.message);
-    }
-  };
-  reader.readAsArrayBuffer(file);
-}
-
-// ══════════════════════════════════════════════════════════
 //  초기화 (Firebase 로드 전 기본 렌더링)
 // ══════════════════════════════════════════════════════════
 document.getElementById('n-home').classList.add('on');
@@ -2698,6 +2440,32 @@ window.exportStudentExcel = async function(){
 
 // ── 앱 시작 ───────────────────────────────────────────────
 initFirebase();
+
+// ── window._fb 별칭 등록 (일반 script에서 호출 가능하도록) ──
+window._fbSubmitPost      = window.submitPost;
+window._fbLikeP           = window.likeP;
+window._fbAddCmt          = window.addCmt;
+window._fbAdmSendReply    = window.admSendReply;
+window._fbAdmDelPost      = window.admDelPost;
+window._fbAdmTogglePrivacy= window.admTogglePrivacy;
+window._fbAdmSaveNotice   = window.admSaveNotice;
+window._fbAdmDelNotice    = window.admDelNotice;
+window._fbAdmAddEvent     = window.admAddEvent;
+window._fbAdmDelEvent     = window.admDelEvent;
+window._fbAdmAddVote      = window.admAddVote;
+window._fbAdmToggleVote   = window.admToggleVote;
+window._fbAdmDelVote      = window.admDelVote;
+window._fbAdmAddGallery   = window.admAddGallery;
+window._fbAdmDelGallery   = window.admDelGallery;
+window._fbAdmSaveBudget   = window.admSaveBudget;
+window._fbAdmAddFaq       = window.admAddFaq;
+window._fbAdmDelFaq       = window.admDelFaq;
+window._fbAdmSaveFaq      = window.admSaveFaqItem;
+window._fbAdmRenderStudents = window.admRenderStudents;
+window._fbAdmDelStudent   = window.admDelStudentById;
+window._fbAdmClearOrphans = window.admClearOrphanStudents;
+window._fbExportExcel     = window.exportStudentExcel;
+window._fbImportExcel     = window.importStudentExcel;
 </script>
 </body>
 </html>
